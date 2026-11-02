@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>国と通貨暗記カード</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+.card-wrap { perspective: 1000px; }
+.card-inner { transform-style: preserve-3d; transition: transform 0.5s ease; cursor: pointer; }
+.card-inner.flipped { transform: rotateY(180deg); }
+.card-front, .card-back { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.card-back { transform: rotateY(180deg); }
+.opt-btn { transition: all 0.15s; }
+.opt-btn:hover { transform: scale(1.02); }
+</style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen p-4">
+<div class="max-w-2xl mx-auto">
+  <h1 class="text-2xl font-bold text-amber-400 mb-1">🌍 国と通貨暗記カード</h1>
+  <p class="text-gray-400 text-sm mb-4">国名から通貨名称を暗記カードで繰り返し学習</p>
+
+  <!-- タブ -->
+  <div class="flex rounded-xl overflow-hidden border border-gray-700 mb-4">
+    <button onclick="setTab('flash')" id="tab-flash" aria-label="フラッシュカードモード"
+      class="flex-1 py-2 text-sm font-semibold transition bg-amber-600 text-white">🃏 カード</button>
+    <button onclick="setTab('quiz')" id="tab-quiz" aria-label="クイズモード"
+      class="flex-1 py-2 text-sm font-semibold transition bg-gray-800 text-gray-300 hover:bg-gray-700">❓ クイズ</button>
+    <button onclick="setTab('stats')" id="tab-stats" aria-label="正解率グラフ"
+      class="flex-1 py-2 text-sm font-semibold transition bg-gray-800 text-gray-300 hover:bg-gray-700">📊 成績</button>
+  </div>
+
+  <!-- フラッシュカード -->
+  <div id="section-flash">
+    <div class="flex flex-wrap gap-2 mb-3">
+      <select id="region-filter" aria-label="地域フィルター" onchange="applyFilter()"
+        class="bg-gray-800 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+        <option value="all">全地域</option>
+        <option value="アジア">アジア</option>
+        <option value="ヨーロッパ">ヨーロッパ</option>
+        <option value="アメリカ">アメリカ</option>
+        <option value="その他">その他</option>
+      </select>
+      <span id="flash-progress" class="text-xs text-gray-400 self-center"></span>
+    </div>
+
+    <div class="card-wrap mb-4" style="height:180px;" onclick="flipFlash()">
+      <div id="flash-card" class="card-inner relative w-full h-full" role="button" aria-label="カードをタップして裏返す" tabindex="0">
+        <div class="card-front absolute inset-0 bg-gray-900 rounded-2xl border-2 border-amber-700 flex flex-col items-center justify-center">
+          <div class="text-xs text-gray-500 mb-2">国名</div>
+          <div id="flash-country" class="text-4xl font-bold text-amber-300 mb-1">-</div>
+          <div id="flash-region-tag" class="text-xs text-gray-500"></div>
+          <div class="absolute bottom-4 text-xs text-gray-600">タップで確認</div>
+        </div>
+        <div class="card-back absolute inset-0 bg-gray-900 rounded-2xl border-2 border-green-700 flex flex-col items-center justify-center">
+          <div class="text-xs text-gray-500 mb-2">通貨</div>
+          <div id="flash-symbol" class="text-5xl font-bold text-green-300 mb-1"></div>
+          <div id="flash-currency" class="text-2xl font-semibold text-green-200 mb-1"></div>
+          <div id="flash-currency-en" class="text-sm text-gray-400"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="flashAnswer(false)" aria-label="わからない"
+        class="flex-1 py-3 bg-red-700 hover:bg-red-600 rounded-xl font-bold text-sm transition">✗ わからない</button>
+      <button onclick="flashNext()" aria-label="次のカード"
+        class="flex-1 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl font-bold text-sm transition">→ 次へ</button>
+      <button onclick="flashAnswer(true)" aria-label="わかった"
+        class="flex-1 py-3 bg-green-700 hover:bg-green-600 rounded-xl font-bold text-sm transition">✓ わかった</button>
+    </div>
+  </div>
+
+  <!-- クイズ -->
+  <div id="section-quiz" class="hidden">
+    <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800 mb-4">
+      <div class="text-xs text-gray-500 mb-2 text-center">次の国の通貨は？</div>
+      <div id="quiz-country" class="text-4xl font-bold text-amber-300 text-center mb-2">-</div>
+      <div id="quiz-region" class="text-xs text-gray-500 text-center mb-4"></div>
+      <div id="quiz-options" class="grid grid-cols-2 gap-3"></div>
+      <div id="quiz-result" class="text-center mt-4 text-lg font-bold hidden"></div>
+    </div>
+    <div class="flex justify-between text-sm text-gray-400">
+      <span>正解: <span id="qc" class="text-green-400 font-bold">0</span></span>
+      <span>不正解: <span id="qw" class="text-red-400 font-bold">0</span></span>
+      <span>正解率: <span id="qpct" class="text-amber-400 font-bold">-</span></span>
+    </div>
+  </div>
+
+  <!-- 成績 -->
+  <div id="section-stats" class="hidden">
+    <div class="space-y-4">
+      <div id="region-charts"></div>
+      <button onclick="resetProgress()" aria-label="進捗をリセット"
+        class="w-full py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm text-gray-400 transition">
+        進捗リセット
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = [
+  {country:'日本',currency:'円',symbol:'¥',en:'Yen',region:'アジア'},
+  {country:'中国',currency:'人民元',symbol:'¥',en:'Yuan',region:'アジア'},
+  {country:'韓国',currency:'ウォン',symbol:'₩',en:'Won',region:'アジア'},
+  {country:'インド',currency:'ルピー',symbol:'₹',en:'Rupee',region:'アジア'},
+  {country:'タイ',currency:'バーツ',symbol:'฿',en:'Baht',region:'アジア'},
+  {country:'ベトナム',currency:'ドン',symbol:'₫',en:'Dong',region:'アジア'},
+  {country:'シンガポール',currency:'シンガポールドル',symbol:'S$',en:'SGD',region:'アジア'},
+  {country:'インドネシア',currency:'ルピア',symbol:'Rp',en:'Rupiah',region:'アジア'},
+  {country:'マレーシア',currency:'リンギット',symbol:'RM',en:'Ringgit',region:'アジア'},
+  {country:'フィリピン',currency:'ペソ',symbol:'₱',en:'Peso',region:'アジア'},
+  {country:'アメリカ',currency:'ドル',symbol:'$',en:'Dollar',region:'アメリカ'},
+  {country:'カナダ',currency:'カナダドル',symbol:'C$',en:'CAD',region:'アメリカ'},
+  {country:'メキシコ',currency:'メキシコペソ',symbol:'$',en:'Peso',region:'アメリカ'},
+  {country:'ブラジル',currency:'レアル',symbol:'R$',en:'Real',region:'アメリカ'},
+  {country:'アルゼンチン',currency:'ペソ',symbol:'$',en:'Peso',region:'アメリカ'},
+  {country:'チリ',currency:'チリペソ',symbol:'$',en:'CLP',region:'アメリカ'},
+  {country:'イギリス',currency:'ポンド',symbol:'£',en:'Pound',region:'ヨーロッパ'},
+  {country:'ユーロ圏',currency:'ユーロ',symbol:'€',en:'Euro',region:'ヨーロッパ'},
+  {country:'スイス',currency:'スイスフラン',symbol:'CHF',en:'Franc',region:'ヨーロッパ'},
+  {country:'スウェーデン',currency:'クローナ',symbol:'kr',en:'Krona',region:'ヨーロッパ'},
+  {country:'ノルウェー',currency:'クローネ',symbol:'kr',en:'Krone',region:'ヨーロッパ'},
+  {country:'デンマーク',currency:'クローネ',symbol:'kr',en:'Krone',region:'ヨーロッパ'},
+  {country:'ポーランド',currency:'ズウォティ',symbol:'zł',en:'Zloty',region:'ヨーロッパ'},
+  {country:'チェコ',currency:'コルナ',symbol:'Kč',en:'Koruna',region:'ヨーロッパ'},
+  {country:'ロシア',currency:'ルーブル',symbol:'₽',en:'Ruble',region:'ヨーロッパ'},
+  {country:'オーストラリア',currency:'豪ドル',symbol:'A$',en:'AUD',region:'その他'},
+  {country:'ニュージーランド',currency:'NZドル',symbol:'NZ$',en:'NZD',region:'その他'},
+  {country:'南アフリカ',currency:'ランド',symbol:'R',en:'Rand',region:'その他'},
+  {country:'エジプト',currency:'ポンド',symbol:'£',en:'EGP',region:'その他'},
+  {country:'トルコ',currency:'リラ',symbol:'₺',en:'Lira',region:'その他'},
+  {country:'サウジアラビア',currency:'リヤル',symbol:'﷼',en:'Riyal',region:'その他'},
+  {country:'UAE',currency:'ディルハム',symbol:'د.إ',en:'Dirham',region:'その他'},
+  {country:'イスラエル',currency:'シェケル',symbol:'₪',en:'Shekel',region:'その他'},
+];
+
+let currentTab = 'flash';
+let filteredDeck = [...DATA];
+let flashIdx = 0;
+let flashFlipped = false;
+let progress = {};
+let quizCorrect = 0, quizWrong = 0;
+
+function loadProgress() {
+  progress = JSON.parse(localStorage.getItem('currency-progress') || '{}');
+}
+function saveProgress() {
+  localStorage.setItem('currency-progress', JSON.stringify(progress));
+}
+
+function setTab(t) {
+  currentTab = t;
+  ['flash','quiz','stats'].forEach(id => {
+    document.getElementById('section-'+id).classList.toggle('hidden', id!==t);
+    const btn = document.getElementById('tab-'+id);
+    btn.className = `flex-1 py-2 text-sm font-semibold transition ${id===t ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`;
+  });
+  if (t === 'stats') renderStats();
+  if (t === 'quiz') nextQuiz();
+}
+
+function applyFilter() {
+  const r = document.getElementById('region-filter').value;
+  filteredDeck = r === 'all' ? [...DATA] : DATA.filter(d => d.region === r);
+  filteredDeck = filteredDeck.sort(() => Math.random() - 0.5);
+  flashIdx = 0;
+  showFlash();
+}
+
+function showFlash() {
+  if (!filteredDeck.length) return;
+  const d = filteredDeck[flashIdx];
+  const card = document.getElementById('flash-card');
+  card.classList.remove('flipped');
+  flashFlipped = false;
+  document.getElementById('flash-country').textContent = d.country;
+  document.getElementById('flash-region-tag').textContent = d.region;
+  document.getElementById('flash-symbol').textContent = d.symbol;
+  document.getElementById('flash-currency').textContent = d.currency;
+  document.getElementById('flash-currency-en').textContent = d.en;
+  document.getElementById('flash-progress').textContent = `${flashIdx+1} / ${filteredDeck.length}`;
+}
+
+function flipFlash() {
+  flashFlipped = !flashFlipped;
+  document.getElementById('flash-card').classList.toggle('flipped', flashFlipped);
+}
+
+function flashAnswer(correct) {
+  const d = filteredDeck[flashIdx];
+  if (!progress[d.country]) progress[d.country] = {c:0,w:0};
+  if (correct) progress[d.country].c++; else progress[d.country].w++;
+  saveProgress();
+  flashNext();
+}
+
+function flashNext() {
+  flashIdx = (flashIdx + 1) % filteredDeck.length;
+  showFlash();
+}
+
+// Quiz
+let quizItem = null;
+function nextQuiz() {
+  document.getElementById('quiz-result').classList.add('hidden');
+  quizItem = DATA[Math.floor(Math.random() * DATA.length)];
+  document.getElementById('quiz-country').textContent = quizItem.country;
+  document.getElementById('quiz-region').textContent = quizItem.region;
+
+  const opts = [quizItem];
+  while (opts.length < 4) {
+    const candidate = DATA[Math.floor(Math.random() * DATA.length)];
+    if (!opts.find(o => o.currency === candidate.currency)) opts.push(candidate);
+  }
+  opts.sort(() => Math.random() - 0.5);
+
+  document.getElementById('quiz-options').innerHTML = opts.map(o => `
+    <button onclick="checkQuiz('${o.currency}')" aria-label="${o.currency}を選択"
+      class="opt-btn py-3 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm font-semibold border border-gray-700 transition">
+      ${o.symbol} ${o.currency}
+    </button>`).join('');
+}
+
+function checkQuiz(selected) {
+  const correct = selected === quizItem.currency;
+  if (!progress[quizItem.country]) progress[quizItem.country] = {c:0,w:0};
+  if (correct) { progress[quizItem.country].c++; quizCorrect++; }
+  else { progress[quizItem.country].w++; quizWrong++; }
+  saveProgress();
+
+  const res = document.getElementById('quiz-result');
+  res.textContent = correct ? `✓ 正解！ ${quizItem.symbol} ${quizItem.currency}` : `✗ 不正解 → ${quizItem.symbol} ${quizItem.currency}`;
+  res.className = `text-center mt-4 text-lg font-bold ${correct ? 'text-green-400' : 'text-red-400'}`;
+  res.classList.remove('hidden');
+
+  document.getElementById('qc').textContent = quizCorrect;
+  document.getElementById('qw').textContent = quizWrong;
+  const pct = quizCorrect + quizWrong > 0 ? Math.round(quizCorrect/(quizCorrect+quizWrong)*100) : 0;
+  document.getElementById('qpct').textContent = pct + '%';
+
+  const buttons = document.querySelectorAll('#quiz-options button');
+  buttons.forEach(b => { b.disabled = true; b.classList.add('opacity-60'); });
+
+  setTimeout(nextQuiz, 1500);
+}
+
+function renderStats() {
+  const regions = ['アジア','ヨーロッパ','アメリカ','その他'];
+  const container = document.getElementById('region-charts');
+  container.innerHTML = regions.map(r => {
+    const items = DATA.filter(d => d.region === r);
+    const bars = items.map(d => {
+      const s = progress[d.country] || {c:0,w:0};
+      const total = s.c + s.w;
+      const pct = total ? Math.round(s.c/total*100) : 0;
+      return `<div class="flex items-center gap-2 text-xs">
+        <span class="text-gray-400 w-24 truncate">${d.country}</span>
+        <div class="flex-1 bg-gray-800 rounded-full h-2">
+          <div class="bg-amber-500 h-2 rounded-full" style="width:${pct}%"></div>
+        </div>
+        <span class="text-gray-400 w-8 text-right">${pct}%</span>
+      </div>`;
+    }).join('');
+    return `<div class="bg-gray-900 rounded-xl p-4 border border-gray-800 mb-3">
+      <h3 class="text-sm font-semibold text-amber-300 mb-3">${r}</h3>
+      <div class="space-y-1.5">${bars}</div>
+    </div>`;
+  }).join('');
+}
+
+function resetProgress() {
+  if (!confirm('進捗をリセットしますか？')) return;
+  progress = {}; quizCorrect = 0; quizWrong = 0;
+  saveProgress();
+  renderStats();
+}
+
+document.getElementById('flash-card').addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') flipFlash();
+});
+
+loadProgress();
+applyFilter();
+</script>
+</body>
+</html>
